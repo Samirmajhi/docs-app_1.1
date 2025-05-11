@@ -70,7 +70,7 @@ for (const interfaceName of Object.keys(networkInterfaces)) {
   if (localIP !== '0.0.0.0') break;
 }
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 7000;
 const HOST = process.env.HOST || localIP;
 
 // Override any environment variables

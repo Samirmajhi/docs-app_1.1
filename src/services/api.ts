@@ -4,11 +4,11 @@ import { toast } from 'sonner';
 // Get the server's IP address from the current URL
 const getServerIP = () => {
   // Always return our fixed IP address
-  return '192.168.1.66';
+  return '34.132.75.76';
 };
 
 const SERVER_IP = getServerIP();
-export const API_URL = `http://${SERVER_IP}:8000/api`;
+export const API_URL = `http://${SERVER_IP}:7000/api`;
 console.log('API URL configured as:', API_URL);
 
 // Function to check if token is expired

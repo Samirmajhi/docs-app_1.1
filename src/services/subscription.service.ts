@@ -37,7 +37,7 @@ const DEFAULT_STORAGE = {
 
 class SubscriptionService {
   // Use a hardcoded URL to avoid any issues with baseUrl being undefined
-  private baseUrl = 'http://192.168.1.66:8000/api';
+  private baseUrl = 'http://34.132.75.76:7000/api';
 
   async getPlans(): Promise<SubscriptionPlan[]> {
     try {
@@ -68,7 +68,7 @@ class SubscriptionService {
       try {
         const timestamp = new Date().getTime(); // Cache-busting parameter
         // Direct fetch call with hardcoded URL
-        const response = await fetch(`http://192.168.1.66:8000/api/subscription/user?t=${timestamp}`, {
+        const response = await fetch(`http://34.132.75.76:7000/api/subscription/user?t=${timestamp}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
             'Content-Type': 'application/json'
@@ -151,7 +151,7 @@ class SubscriptionService {
       try {
         const timestamp = new Date().getTime(); // Cache-busting parameter
         // Direct fetch call with hardcoded URL
-        const response = await fetch(`http://192.168.1.66:8000/api/subscription/storage?t=${timestamp}`, {
+        const response = await fetch(`http://34.132.75.76:7000/api/subscription/storage?t=${timestamp}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
             'Content-Type': 'application/json'
