@@ -1,0 +1,178 @@
+
+# SECUREDOC - COMPLETE SETUP GUIDE
+
+This guide covers everything you need to know to set up and run the SecureDoc application.
+
+## 1. ENVIRONMENT VARIABLES
+
+The application uses the following environment variables in the .env file:
+
+```
+# API Settings
+VITE_API_URL=https://mockapi.securedoc.com/api
+VITE_STORAGE_URL=https://mockapi.securedoc.com/storage
+
+# Auth Settings
+VITE_JWT_SECRET=your-secret-key
+
+# Database settings
+VITE_DB_HOST=localhost
+VITE_DB_PORT=5432
+VITE_DB_NAME=securedoc
+VITE_DB_USER=securedocuser
+VITE_DB_PASSWORD=your-secure-password
+```
+
+For local development, the application is configured to use mock API endpoints (mockapi.securedoc.com).
+In production, you should replace these with your actual API endpoints.
+
+## 2. DATABASE SETUP
+
+### PostgreSQL Setup Instructions:
+
+For Windows:
+1. Download PostgreSQL from postgresql.org/download/windows/
+2. Set password for postgres user during installation
+3. PostgreSQL should start automatically as a service
+4. Use pgAdmin to manage your database
+
+For macOS:
+```bash
+brew install postgresql@14
+brew services start postgresql@14
+```
+
+For Linux (Ubuntu/Debian):
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+### Creating the Database:
+
+Access PostgreSQL command line and run:
+```sql
+CREATE DATABASE securedoc;
+CREATE USER securedocuser WITH ENCRYPTED PASSWORD 'your-secure-password';
+GRANT ALL PRIVILEGES ON DATABASE securedoc TO securedocuser;
+```
+
+## 3. APPLICATION STRUCTURE
+
+Frontend (React + TypeScript + Vite):
+- /src
+  - /components - UI components
+  - /context - React context providers
+  - /hooks - Custom React hooks
+  - /lib - Utility functions
+  - /pages - Page components
+  - /services - API service functions
+
+Backend (Express.js):
+- server.js - Main server file
+- Database models and controllers
+
+## 4. API ENDPOINTS
+
+Authentication:
+- POST /auth/login - User login
+- POST /auth/register - User registration
+- GET /user/profile - Get user profile
+- PUT /user/profile - Update user profile
+
+Documents:
+- GET /documents - List all documents
+- POST /documents/upload - Upload a document
+- DELETE /documents/:id - Delete a document
+- PUT /documents/:id/rename - Rename a document
+
+QR Code & Access:
+- POST /qrcode/generate - Generate QR code
+- GET /qrcode/validate/:code - Validate QR code
+- POST /access/request - Request access to documents
+- POST /access/verify - Verify owner access
+
+## 5. MOCK DATA SYSTEM
+
+For development without a backend, the application uses a mock data system:
+- Configured in src/services/api.ts
+- Intercepts API requests when the backend is unavailable
+- Provides simulated responses for authentication and user data
+- Stores data in localStorage for persistence between sessions
+
+## 6. AUTHENTICATION FLOW
+
+1. User registers or logs in
+2. Backend validates credentials and returns JWT token
+3. Token is stored in localStorage
+4. Token is included in Authorization header for subsequent requests
+5. User session persists until logout or token expiration
+
+## 7. DOCUMENT HANDLING
+
+Upload:
+1. File is selected using the file input
+2. FormData is created with the file
+3. File is uploaded to the server via POST request
+4. Server stores the file and returns metadata
+
+Download/View:
+1. Document is selected from the list
+2. Request is made to the server for the file
+3. File is streamed to the client for viewing or download
+
+## 8. QR CODE SHARING SYSTEM
+
+1. Document owner generates QR code with optional access code
+2. QR code contains a link to the application with a unique identifier
+3. Recipient scans QR code and is directed to the access page
+4. If required, recipient enters access code
+5. Recipient selects documents to request access for
+6. Owner approves/denies the request
+7. Upon approval, recipient gains temporary access
+
+## 9. RUNNING THE APPLICATION
+
+Development:
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+Production:
+```bash
+# Build the application
+npm run build
+
+# Serve the built application
+npm run serve
+```
+
+## 10. SECURITY CONSIDERATIONS
+
+- JWT tokens for authentication
+- Database passwords are securely hashed
+- Access codes for document sharing
+- Document access is controlled by the owner
+- QR codes expire after a set period
+
+## 11. TROUBLESHOOTING
+
+- If database connection fails, check PostgreSQL service is running
+- For QR code scanning issues, ensure devices are on the same network
+- Network errors may indicate the backend server is not running
+- For mock data mode, check the console for "Using mock data for:" messages
+
+## 12. ADDITIONAL RESOURCES
+
+- React documentation: reactjs.org
+- Vite documentation: vitejs.dev
+- TypeScript documentation: typescriptlang.org
+- Express documentation: expressjs.com
+- PostgreSQL documentation: postgresql.org/docs
+- Tailwind CSS documentation: tailwindcss.com/docs

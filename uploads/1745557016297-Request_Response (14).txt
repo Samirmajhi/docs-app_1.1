@@ -1,0 +1,5 @@
+Request:
+{"uname":"NMTUAT001","upd":"ycOt5CHCE3kT/4C8qXfL1Q==:DMzcAAWls2WmsJE38lxaK5OxAdgdFOm0Pp75NAjvN0bluosytBl3b6Na/JUH92KfD4/04UGPhJJypbF6ENj0IQ=="}securityNo=1000136541991transactionNote=Transaction is successfully saved at Neo MT, will be processed further
+
+Response:
+true
