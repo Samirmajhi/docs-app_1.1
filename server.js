@@ -128,25 +128,42 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.API_URL}/auth/google/callback`,  // Changed to use API_URL
+    callbackURL: `${process.env.API_URL}/auth/google/callback`,
     passReqToCallback: true
   },
   async function(request, accessToken, refreshToken, profile, done) {
     try {
-      // Check if user exists
-      const existingUser = await pool.query(
+      // First try to find user by Google ID
+      let user = await pool.query(
         'SELECT * FROM users WHERE google_id = $1',
         [profile.id]
       );
 
-      if (existingUser.rows.length) {
-        // User exists, return the user
-        return done(null, existingUser.rows[0]);
+      // If not found by Google ID, try to find by email
+      if (user.rows.length === 0) {
+        user = await pool.query(
+          'SELECT * FROM users WHERE email = $1',
+          [profile.emails[0].value]
+        );
+      }
+
+      if (user.rows.length > 0) {
+        // User exists, update Google ID if not set
+        if (!user.rows[0].google_id) {
+          await pool.query(
+            'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2 WHERE id = $3',
+            [profile.id, profile.photos[0].value, user.rows[0].id]
+          );
+        }
+        return done(null, user.rows[0]);
       }
 
       // Create new user
       const newUser = await pool.query(
-        'INSERT INTO users (google_id, email, name, profile_picture, is_google_auth) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        `INSERT INTO users 
+         (google_id, email, full_name, profile_picture, is_google_auth) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING *`,
         [
           profile.id,
           profile.emails[0].value,
@@ -158,6 +175,7 @@ passport.use(new GoogleStrategy({
 
       return done(null, newUser.rows[0]);
     } catch (error) {
+      console.error('Google OAuth error:', error);
       return done(error, null);
     }
   }
@@ -206,7 +224,14 @@ app.options('*', cors());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  trustProxy: false, // Disable trust proxy for rate limiter
+  keyGenerator: (req) => {
+    // Use CF-Connecting-IP or X-Real-IP or fallback to IP
+    return req.headers['cf-connecting-ip'] || 
+           req.headers['x-real-ip'] || 
+           req.ip;
+  }
 });
 
 // Apply rate limiting to all routes
@@ -1927,35 +1952,61 @@ class DocumentStorageManager {
 // Initialize document storage manager
 const documentStorage = new DocumentStorageManager();
 
-// Drop and recreate all tables on server start
+// Initialize database before starting server
 const initializeDatabase = async () => {
   try {
-    // Add security_pin column if it doesn't exist
+    // Add Google OAuth columns if they don't exist
     await pool.query(`
       DO $$ 
       BEGIN 
+        -- Add google_id column if it doesn't exist
         IF NOT EXISTS (
           SELECT 1 
           FROM information_schema.columns 
           WHERE table_name = 'users' 
-          AND column_name = 'security_pin'
+          AND column_name = 'google_id'
         ) THEN
-          ALTER TABLE users ADD COLUMN security_pin VARCHAR(255);
+          ALTER TABLE users ADD COLUMN google_id VARCHAR(255) UNIQUE;
         END IF;
+
+        -- Add profile_picture column if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' 
+          AND column_name = 'profile_picture'
+        ) THEN
+          ALTER TABLE users ADD COLUMN profile_picture VARCHAR(255);
+        END IF;
+
+        -- Add is_google_auth column if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' 
+          AND column_name = 'is_google_auth'
+        ) THEN
+          ALTER TABLE users ADD COLUMN is_google_auth BOOLEAN DEFAULT false;
+        END IF;
+
+        -- Make password_hash nullable
+        ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
       END $$;
     `);
 
-    // Create users table with password_hash column
+    // Create users table if it doesn't exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255),
         full_name VARCHAR(255),
         mobile_number VARCHAR(20),
         security_pin VARCHAR(255),
         subscription_id UUID,
         storage_used BIGINT DEFAULT 0,
+        google_id VARCHAR(255) UNIQUE,
+        profile_picture VARCHAR(255),
         is_google_auth BOOLEAN DEFAULT false,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -2040,7 +2091,7 @@ const initializeDatabase = async () => {
       )
     `);
 
-    console.log('Database tables initialized successfully');
+    console.log('Database tables and columns initialized successfully');
   } catch (error) {
     console.error('Error initializing database:', error);
     throw error;
