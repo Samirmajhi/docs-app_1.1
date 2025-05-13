@@ -1,0 +1,16 @@
+[Unit]
+Description=SecureDoc Application
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/securedoc
+ExecStart=/usr/bin/node server.js
+Restart=always
+Environment=NODE_ENV=production
+Environment=PORT=7000
+Environment=HOST=0.0.0.0
+
+[Install]
+WantedBy=multi-user.target 

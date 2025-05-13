@@ -30,7 +30,9 @@ import cookieParser from 'cookie-parser';
 import { format } from 'date-fns';
 
 // Load environment variables from .env file
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+const envPath = path.resolve(process.cwd(), 'env');
+console.log('Loading environment variables from:', envPath);
+dotenv.config({ path: envPath });
 
 // Configure Winston logger
 const logger = winston.createLogger({

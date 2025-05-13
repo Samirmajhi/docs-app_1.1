@@ -1,43 +1,50 @@
 import pg from 'pg';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables
+const envPath = path.resolve(process.cwd(), 'env');
+dotenv.config({ path: envPath });
 
 const { Pool } = pg;
 
-// Create a connection pool
+// Create a connection pool using environment variables
 const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_8fWqJMv4Ksel@ep-square-snowflake-a4gn24ow-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require',
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   ssl: {
     rejectUnauthorized: false
   }
 });
 
-async function checkPrices() {
+async function checkConnection() {
   try {
-    console.log('Checking subscription plans...');
+    console.log('Testing database connection...');
     
-    // Query current subscription plans
-    const plansResult = await pool.query('SELECT id, name, price, storage_limit FROM subscription_plans ORDER BY id');
+    // Test the connection
+    const result = await pool.query('SELECT NOW()');
+    console.log('Database connection successful!');
+    console.log('Server time:', result.rows[0].now);
     
-    console.log('Current subscription plans:');
-    console.log(plansResult.rows);
+    // Check if users table exists
+    const tableResult = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `);
     
-    // Update prices directly
-    console.log('Updating Pro plan price to 499...');
-    await pool.query('UPDATE subscription_plans SET price = 499 WHERE id = 2');
-    
-    console.log('Updating Enterprise plan price to 4000...');
-    await pool.query('UPDATE subscription_plans SET price = 4000 WHERE id = 3');
-    
-    // Check updated plans
-    const updatedPlansResult = await pool.query('SELECT id, name, price, storage_limit FROM subscription_plans ORDER BY id');
-    
-    console.log('Updated subscription plans:');
-    console.log(updatedPlansResult.rows);
+    console.log('Users table exists:', tableResult.rows[0].exists);
     
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Database connection error:', error);
   } finally {
     await pool.end();
   }
 }
 
-checkPrices(); 
+checkConnection(); 
