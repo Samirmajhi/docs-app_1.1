@@ -105,17 +105,32 @@ app.use(helmet({
 }));
 
 // CORS configuration
-app.use(cors({
-  origin: [
-    'https://samirmajhi369.com.np',
-    'https://accounts.google.com',
-    'https://oauth2.googleapis.com',
-    process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : null
-  ].filter(Boolean),
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'https://samirmajhi369.com.np',
+      'https://api.samirmajhi369.com.np',
+      'https://accounts.google.com',
+      'https://oauth2.googleapis.com'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
+};
+
+app.use(cors(corsOptions));
+
+// Also enable pre-flight requests for all routes
+app.options('*', cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
