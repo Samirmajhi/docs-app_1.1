@@ -250,20 +250,55 @@ app.use(cors({
     ];
     
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('CORS blocked origin:', origin);
+      callback(null, false);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Content-Length', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin',
+    'Cache-Control',
+    'X-Auth-Token'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Authorization'],
+  maxAge: 86400 // 24 hours in seconds
 }));
 
 // Enable pre-flight requests for all routes
 app.options('*', cors());
+
+// Additional headers for security and CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Auth-Token'
+  );
+  
+  // Log CORS-related headers for debugging
+  console.log('CORS Headers:', {
+    origin: req.headers.origin,
+    credentials: req.headers['access-control-request-credentials'],
+    method: req.method,
+    path: req.path
+  });
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -1805,6 +1840,21 @@ app.get('/auth/google/callback',
         console.error('Session save error:', err);
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_save_error`);
       }
+
+      // Set authentication cookie
+      res.cookie('isAuthenticated', 'true', {
+        httpOnly: false,
+        secure: true,
+        sameSite: 'none',
+        domain: process.env.NODE_ENV === 'production' ? '.samirmajhi369.com.np' : undefined,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
+
+      // Add CORS headers specifically for the redirect
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL);
+      
+      // Redirect to dashboard
       res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     });
   }
