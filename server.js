@@ -28,6 +28,9 @@ import axios from 'axios';
 import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import { format } from 'date-fns';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import session from 'express-session';
 
 // Load environment variables from .env file
 const envPath = path.resolve(process.cwd(), 'env');
@@ -56,56 +59,23 @@ if (process.env.NODE_ENV !== 'production') {
 // Initialize express app
 const app = express();
 
-// Get network interfaces
-const networkInterfaces = os.networkInterfaces();
-let localIP = '0.0.0.0';
-
-// Find the first non-internal IPv4 address
-for (const interfaceName of Object.keys(networkInterfaces)) {
-  const networkInterface = networkInterfaces[interfaceName];
-  for (const iface of networkInterface) {
-    if (iface.family === 'IPv4' && !iface.internal) {
-      localIP = iface.address;
-      break;
-    }
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
-  if (localIP !== '0.0.0.0') break;
-}
-
-const PORT = process.env.PORT || 7000;
-const HOST = process.env.HOST || localIP;
-
-// Override any environment variables
-process.env.PORT = PORT;
-process.env.HOST = HOST;
-process.env.FRONTEND_URL = process.env.FRONTEND_URL || `http://${HOST}:5173`;
-
-// Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'", "https://samirmajhi369.com.np"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://*.google.com", "https://*.googleapis.com", "https://*.gstatic.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https:"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: [
-        "'self'", 
-        "https://samirmajhi369.com.np",
-        "https://api.samirmajhi369.com.np",
-        "https://*.google.com",
-        "https://*.googleapis.com"
-      ],
-      frameSrc: ["'self'", "https://*.google.com"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
-    },
-  },
-  crossOriginEmbedderPolicy: false,
 }));
 
+// Initialize Passport and restore authentication state from session
+app.use(passport.initialize());
+app.use(passport.session());
+
 // CORS configuration
-const corsOptions = {
+app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
       'https://samirmajhi369.com.np',
@@ -125,12 +95,10 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
-};
+}));
 
-app.use(cors(corsOptions));
-
-// Also enable pre-flight requests for all routes
-app.options('*', cors(corsOptions));
+// Enable pre-flight requests for all routes
+app.options('*', cors());
 
 // Rate limiting
 const limiter = rateLimit({
@@ -1625,87 +1593,29 @@ const oauth2Client = new OAuth2Client(
 );
 
 // Google OAuth routes
-app.get('/auth/google', (req, res) => {
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['email', 'profile'],
-    prompt: 'consent',
-    include_granted_scopes: true
-  });
-  console.log('Generated Google OAuth URL:', url);
-  res.redirect(url);
-});
+app.get('/auth/google', passport.authenticate('google', {
+  scope: ['profile', 'email'],
+  prompt: 'select_account'
+}));
 
-app.get('/auth/google/callback', async (req, res) => {
-  try {
-    console.log('Google OAuth callback received with query params:', req.query);
-    const { code, error } = req.query;
-    
-    if (error) {
-      console.error('Google OAuth error:', error);
-      return res.redirect(`${process.env.FRONTEND_URL}/auth/error?message=${encodeURIComponent(error)}`);
-    }
-    
-    if (!code) {
-      console.error('No authorization code received from Google');
-      return res.redirect(`${process.env.FRONTEND_URL}/auth/error?message=no_code`);
-    }
-
-    console.log('Exchanging authorization code for tokens...');
-    const { tokens } = await oauth2Client.getToken(code);
-    console.log('Tokens received from Google');
-    oauth2Client.setCredentials(tokens);
-
-    console.log('Verifying ID token...');
-    const ticket = await oauth2Client.verifyIdToken({
-      idToken: tokens.id_token,
-      audience: GOOGLE_CLIENT_ID
-    });
-
-    const payload = ticket.getPayload();
-    console.log('Token payload:', { email: payload.email, name: payload.name });
-    const { email, name } = payload;
-
-    // Check if user exists
-    console.log('Checking if user exists in database...');
-    let user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-
-    if (user.rows.length === 0) {
-      console.log('Creating new user...');
-      // Create new user with empty mobile number and PIN
-      const result = await pool.query(
-        'INSERT INTO users (id, email, full_name, is_google_auth, mobile_number, security_pin) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [uuidv4(), email, name, true, null, null]
-      );
-      user = result;
-      console.log('New user created:', user.rows[0]);
-    } else {
-      // Update existing user to mark as Google auth
-      await pool.query(
-        'UPDATE users SET is_google_auth = true WHERE email = $1',
-        [email]
-      );
-    }
-
-    // Generate JWT token
-    console.log('Generating JWT token...');
-    const token = jwt.sign(
-      { id: user.rows[0].id, email: user.rows[0].email },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    console.log('Redirecting to frontend with token...');
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
-  } catch (error) {
-    console.error('Google OAuth error details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      response: error.response?.data
-    });
-    res.redirect(`${process.env.FRONTEND_URL}/auth/error?message=${encodeURIComponent(error.message)}`);
+app.get('/auth/google/callback', 
+  passport.authenticate('google', { 
+    failureRedirect: `${process.env.FRONTEND_URL}/login`,
+    session: true
+  }),
+  (req, res) => {
+    // Successful authentication
+    res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
+);
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ 
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
 });
 
 // Backblaze B2 Configuration
