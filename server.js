@@ -59,6 +59,30 @@ if (process.env.NODE_ENV !== 'production') {
 // Initialize express app
 const app = express();
 
+// Get network interfaces
+const networkInterfaces = os.networkInterfaces();
+let localIP = '0.0.0.0';
+
+// Find the first non-internal IPv4 address
+for (const interfaceName of Object.keys(networkInterfaces)) {
+  const networkInterface = networkInterfaces[interfaceName];
+  for (const iface of networkInterface) {
+    if (iface.family === 'IPv4' && !iface.internal) {
+      localIP = iface.address;
+      break;
+    }
+  }
+  if (localIP !== '0.0.0.0') break;
+}
+
+const PORT = process.env.PORT || 7000;
+const HOST = process.env.HOST || localIP;
+
+// Override any environment variables
+process.env.PORT = PORT;
+process.env.HOST = HOST;
+process.env.FRONTEND_URL = process.env.FRONTEND_URL || `http://${HOST}:5173`;
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
