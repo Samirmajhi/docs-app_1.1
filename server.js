@@ -109,33 +109,59 @@ process.env.PORT = PORT;
 process.env.HOST = HOST;
 process.env.FRONTEND_URL = process.env.FRONTEND_URL || `http://${HOST}:5173`;
 
+// Parse cookies before session
+app.use(cookieParser(process.env.SESSION_SECRET));
+
 // Session configuration with updated cookie settings
 app.use(session({
+  name: 'sessionId', // Custom cookie name
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: false,
+  rolling: true, // Refresh session with each request
   proxy: true,
   cookie: {
-    secure: true, // Required for HTTPS
-    sameSite: 'none', // Required for cross-site cookies
+    secure: true,
+    httpOnly: true,
+    sameSite: 'none',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    domain: '.samirmajhi369.com.np' // Allow sharing between subdomains
-  }
+    path: '/',
+    domain: process.env.NODE_ENV === 'production' ? '.samirmajhi369.com.np' : undefined
+  },
+  store: new session.MemoryStore() // For development, use proper session store in production
 }));
 
 // Initialize Passport and restore authentication state from session
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Add session debugging middleware
+app.use((req, res, next) => {
+  console.log('Session Debug:', {
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    isAuthenticated: req.isAuthenticated(),
+    user: req.user ? { id: req.user.id, email: req.user.email } : null
+  });
+  next();
+});
+
 // Passport configuration
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: `${process.env.API_URL}/auth/google/callback`,
-    passReqToCallback: true
+    passReqToCallback: true,
+    proxy: true
   },
   async function(request, accessToken, refreshToken, profile, done) {
     try {
+      console.log('Google OAuth Profile:', {
+        id: profile.id,
+        email: profile.emails[0].value,
+        name: profile.displayName
+      });
+
       // First try to find user by Google ID
       let user = await pool.query(
         'SELECT * FROM users WHERE google_id = $1',
@@ -154,18 +180,26 @@ passport.use(new GoogleStrategy({
         // User exists, update Google ID if not set
         if (!user.rows[0].google_id) {
           await pool.query(
-            'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2 WHERE id = $3',
+            'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2, updated_at = NOW() WHERE id = $3',
             [profile.id, profile.photos[0].value, user.rows[0].id]
           );
         }
+        
+        // Update session with user info
+        request.session.user = {
+          id: user.rows[0].id,
+          email: user.rows[0].email,
+          fullName: user.rows[0].full_name
+        };
+        
         return done(null, user.rows[0]);
       }
 
       // Create new user
       const newUser = await pool.query(
         `INSERT INTO users 
-         (google_id, email, full_name, profile_picture, is_google_auth) 
-         VALUES ($1, $2, $3, $4, $5) 
+         (google_id, email, full_name, profile_picture, is_google_auth, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) 
          RETURNING *`,
         [
           profile.id,
@@ -175,6 +209,13 @@ passport.use(new GoogleStrategy({
           true
         ]
       );
+
+      // Update session with new user info
+      request.session.user = {
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        fullName: newUser.rows[0].full_name
+      };
 
       return done(null, newUser.rows[0]);
     } catch (error) {
@@ -1701,30 +1742,49 @@ const oauth2Client = new OAuth2Client(
 );
 
 // Google OAuth routes
-app.get('/auth/google', passport.authenticate('google', {
-  scope: ['profile', 'email'],
-  prompt: 'select_account'
-}));
+app.get('/auth/google', (req, res, next) => {
+  // Clear any existing session
+  req.logout(() => {
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      accessType: 'offline',
+      prompt: 'consent',
+      includeGrantedScopes: true
+    })(req, res, next);
+  });
+});
 
 app.get('/auth/google/callback', 
   (req, res, next) => {
     console.log('OAuth callback received:', {
       session: req.session ? 'exists' : 'missing',
       cookies: req.cookies,
-      query: req.query
+      query: req.query,
+      headers: {
+        origin: req.headers.origin,
+        referer: req.headers.referer,
+        host: req.headers.host
+      }
     });
     next();
   },
   passport.authenticate('google', { 
-    failureRedirect: `${process.env.FRONTEND_URL}/login`,
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=auth_failed`,
     failureMessage: true,
     session: true
   }),
   (req, res) => {
     // Log successful authentication
     console.log('Authentication successful:', {
-      user: req.user ? 'exists' : 'missing',
-      session: req.session ? 'exists' : 'missing'
+      user: req.user ? {
+        id: req.user.id,
+        email: req.user.email,
+        google_id: req.user.google_id
+      } : 'missing',
+      session: req.session ? {
+        id: req.session.id,
+        cookie: req.session.cookie
+      } : 'missing'
     });
     
     // Ensure user is in session
@@ -1732,9 +1792,21 @@ app.get('/auth/google/callback',
       console.error('User missing from request after authentication');
       return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_error`);
     }
+
+    // Set a flash message for successful login
+    req.session.flash = {
+      type: 'success',
+      message: 'Successfully logged in with Google'
+    };
     
-    // Successful authentication
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+    // Ensure session is saved before redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_save_error`);
+      }
+      res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+    });
   }
 );
 
