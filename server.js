@@ -128,7 +128,7 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.API_URL}/auth/google/callback`,
+    callbackURL: `${process.env.API_URL}/auth/google/callback`,  // Changed to use API_URL
     passReqToCallback: true
   },
   async function(request, accessToken, refreshToken, profile, done) {
@@ -146,12 +146,13 @@ passport.use(new GoogleStrategy({
 
       // Create new user
       const newUser = await pool.query(
-        'INSERT INTO users (google_id, email, name, profile_picture) VALUES ($1, $2, $3, $4) RETURNING *',
+        'INSERT INTO users (google_id, email, name, profile_picture, is_google_auth) VALUES ($1, $2, $3, $4, $5) RETURNING *',
         [
           profile.id,
           profile.emails[0].value,
           profile.displayName,
-          profile.photos[0].value
+          profile.photos[0].value,
+          true
         ]
       );
 
