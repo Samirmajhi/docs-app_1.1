@@ -168,7 +168,7 @@ const authService = {
   },
 
   googleLogin: () => {
-    window.location.href = 'http://34.132.75.76:7000/api/auth/google';
+    window.location.href = 'https://api.samirmajhi369.com.np/auth/google';
   },
 
   handleGoogleCallback: async (token: string): Promise<AuthResponse> => {

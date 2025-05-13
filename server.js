@@ -84,14 +84,37 @@ process.env.FRONTEND_URL = process.env.FRONTEND_URL || `http://${HOST}:5173`;
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", `http://${HOST}:${PORT}`, `http://${HOST}:5173`],
+      defaultSrc: ["'self'", "https://samirmajhi369.com.np"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://*.google.com", "https://*.googleapis.com", "https://*.gstatic.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: [
+        "'self'", 
+        "https://samirmajhi369.com.np",
+        "https://api.samirmajhi369.com.np",
+        "https://*.google.com",
+        "https://*.googleapis.com"
+      ],
+      frameSrc: ["'self'", "https://*.google.com"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
     },
   },
   crossOriginEmbedderPolicy: false,
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: [
+    'https://samirmajhi369.com.np',
+    'https://accounts.google.com',
+    'https://oauth2.googleapis.com',
+    process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : null
+  ].filter(Boolean),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 // Rate limiting

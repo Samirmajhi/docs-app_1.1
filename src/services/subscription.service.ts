@@ -1,14 +1,7 @@
 import axios from 'axios';
 import api from './api'; // Import the configured api client instead
 import paymentService from './payment.service';
-
-export interface SubscriptionPlan {
-  id: number;
-  name: string;
-  storage_limit: number;
-  price: number | null;
-  features: string[];
-}
+import { SubscriptionPlan } from '../types/subscription';
 
 export interface UserSubscription {
   id: number;
@@ -64,79 +57,34 @@ class SubscriptionService {
     try {
       console.log('Fetching current subscription...');
       
-      // First try with a direct fetch to avoid any baseUrl issues
-      try {
-        const timestamp = new Date().getTime(); // Cache-busting parameter
-        // Direct fetch call with hardcoded URL
-        const response = await fetch(`http://34.132.75.76:7000/api/subscription/user?t=${timestamp}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Validate response data
-        if (!data) {
-          console.warn('Empty subscription data received');
-          return DEFAULT_FREE_PLAN;
-        }
-        
-        console.log('Current subscription response (raw):', data);
-        
-        // Ensure numeric values are properly converted
-        const storage_limit = typeof data.storage_limit === 'string' 
-          ? parseInt(data.storage_limit, 10) 
-          : (typeof data.storage_limit === 'number' ? data.storage_limit : DEFAULT_FREE_PLAN.storage_limit);
-        
-        const price = typeof data.price === 'string'
-          ? parseFloat(data.price)
-          : (typeof data.price === 'number' ? data.price : 0);
-        
-        // Ensure all required fields are present, use defaults for any missing fields
-        return {
-          id: typeof data.id === 'string' ? parseInt(data.id, 10) : (data.id ?? 1),
-          name: data.name ?? 'Free',
-          storage_limit: storage_limit,
-          price: price,
-          features: data.features ?? DEFAULT_FREE_PLAN.features
-        };
-      } catch (fetchError) {
-        console.error('Error with direct fetch, trying api client:', fetchError);
-        
-        // If direct fetch fails, try with api client
-        const response = await api.get(`/subscription/user?t=${new Date().getTime()}`);
-        
-        if (!response.data) {
-          console.warn('Empty subscription data received');
-          return DEFAULT_FREE_PLAN;
-        }
-        
-        const data = response.data;
-        console.log('Current subscription response (raw from api client):', data);
-        
-        // Ensure numeric values are properly converted
-        const storage_limit = typeof data.storage_limit === 'string' 
-          ? parseInt(data.storage_limit, 10) 
-          : (typeof data.storage_limit === 'number' ? data.storage_limit : DEFAULT_FREE_PLAN.storage_limit);
-        
-        const price = typeof data.price === 'string'
-          ? parseFloat(data.price)
-          : (typeof data.price === 'number' ? data.price : 0);
-        
-        return {
-          id: typeof data.id === 'string' ? parseInt(data.id, 10) : (data.id ?? 1),
-          name: data.name ?? 'Free',
-          storage_limit: storage_limit,
-          price: price,
-          features: data.features ?? DEFAULT_FREE_PLAN.features
-        };
+      const timestamp = new Date().getTime(); // Cache-busting parameter
+      const response = await api.get(`/subscription/user?t=${timestamp}`);
+      
+      if (!response.data) {
+        console.warn('Empty subscription data received');
+        return DEFAULT_FREE_PLAN;
       }
+      
+      const data = response.data;
+      console.log('Current subscription response:', data);
+      
+      // Ensure numeric values are properly converted
+      const storage_limit = typeof data.storage_limit === 'string' 
+        ? parseInt(data.storage_limit, 10) 
+        : (typeof data.storage_limit === 'number' ? data.storage_limit : DEFAULT_FREE_PLAN.storage_limit);
+      
+      const price = typeof data.price === 'string'
+        ? parseFloat(data.price)
+        : (typeof data.price === 'number' ? data.price : 0);
+      
+      // Ensure all required fields are present, use defaults for any missing fields
+      return {
+        id: typeof data.id === 'string' ? parseInt(data.id, 10) : (data.id ?? 1),
+        name: data.name ?? 'Free',
+        storage_limit: storage_limit,
+        price: price,
+        features: data.features ?? DEFAULT_FREE_PLAN.features
+      };
     } catch (error) {
       console.error('Error fetching current subscription:', error);
       return DEFAULT_FREE_PLAN;
