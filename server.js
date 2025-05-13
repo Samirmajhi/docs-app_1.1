@@ -31,6 +31,7 @@ import { format } from 'date-fns';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'express-session';
+import { pool } from './db.js';  // Make sure this path is correct for your DB configuration
 
 // Load environment variables from .env file
 const envPath = path.resolve(process.cwd(), 'env');
@@ -58,6 +59,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Initialize express app
 const app = express();
+
+// Trust proxy - required for rate limiting behind Nginx
+app.set('trust proxy', true);
 
 // Get network interfaces
 const networkInterfaces = os.networkInterfaces();
@@ -97,6 +101,58 @@ app.use(session({
 // Initialize Passport and restore authentication state from session
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Passport configuration
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${process.env.API_URL}/auth/google/callback`,
+    passReqToCallback: true
+  },
+  async function(request, accessToken, refreshToken, profile, done) {
+    try {
+      // Check if user exists
+      const existingUser = await pool.query(
+        'SELECT * FROM users WHERE google_id = $1',
+        [profile.id]
+      );
+
+      if (existingUser.rows.length) {
+        // User exists, return the user
+        return done(null, existingUser.rows[0]);
+      }
+
+      // Create new user
+      const newUser = await pool.query(
+        'INSERT INTO users (google_id, email, name, profile_picture) VALUES ($1, $2, $3, $4) RETURNING *',
+        [
+          profile.id,
+          profile.emails[0].value,
+          profile.displayName,
+          profile.photos[0].value
+        ]
+      );
+
+      return done(null, newUser.rows[0]);
+    } catch (error) {
+      return done(error, null);
+    }
+  }
+));
+
+// Passport serialization
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    done(null, result.rows[0]);
+  } catch (error) {
+    done(error, null);
+  }
+});
 
 // CORS configuration
 app.use(cors({
