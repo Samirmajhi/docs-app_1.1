@@ -241,12 +241,11 @@ passport.deserializeUser(async (id, done) => {
 
 // CORS configuration
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: function(origin, callback) {
     const allowedOrigins = [
       'https://samirmajhi369.com.np',
       'https://api.samirmajhi369.com.np',
-      'https://accounts.google.com',
-      'https://oauth2.googleapis.com'
+      process.env.FRONTEND_URL
     ];
     
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -259,19 +258,16 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'Content-Length', 
-    'X-Requested-With', 
-    'Accept', 
-    'Origin',
-    'Cache-Control',
-    'X-Auth-Token'
-  ],
-  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Authorization'],
-  maxAge: 86400 // 24 hours in seconds
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control'],
+  exposedHeaders: ['Set-Cookie', 'Date', 'ETag']
 }));
+
+// Additional security headers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  next();
+});
 
 // Enable pre-flight requests for all routes
 app.options('*', cors());
@@ -1809,53 +1805,34 @@ app.get('/auth/google/callback',
     session: true
   }),
   (req, res) => {
-    // Log successful authentication
-    console.log('Authentication successful:', {
-      user: req.user ? {
-        id: req.user.id,
-        email: req.user.email,
-        google_id: req.user.google_id
-      } : 'missing',
-      session: req.session ? {
-        id: req.session.id,
-        cookie: req.session.cookie
-      } : 'missing'
-    });
-    
-    // Ensure user is in session
-    if (!req.user) {
-      console.error('User missing from request after authentication');
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_error`);
-    }
-
-    // Set a flash message for successful login
-    req.session.flash = {
-      type: 'success',
-      message: 'Successfully logged in with Google'
-    };
-    
     // Ensure session is saved before redirect
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
-        return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_save_error`);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_error`);
       }
+
+      // Log successful authentication
+      console.log('Authentication successful:', {
+        user: req.user ? {
+          id: req.user.id,
+          email: req.user.email,
+          google_id: req.user.google_id
+        } : 'missing',
+        session: req.session.id
+      });
 
       // Set authentication cookie
       res.cookie('isAuthenticated', 'true', {
         httpOnly: false,
         secure: true,
         sameSite: 'none',
-        domain: process.env.NODE_ENV === 'production' ? '.samirmajhi369.com.np' : undefined,
+        domain: '.samirmajhi369.com.np',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
-      // Add CORS headers specifically for the redirect
-      res.header('Access-Control-Allow-Credentials', 'true');
-      res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL);
-      
-      // Redirect to dashboard
-      res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+      // Redirect to dashboard with session token
+      res.redirect(`${process.env.FRONTEND_URL}/dashboard?auth=${req.session.id}`);
     });
   }
 );
