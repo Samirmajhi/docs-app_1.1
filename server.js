@@ -4,7 +4,7 @@ import bodyParser from 'body-parser';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pkg from 'pg';
-const{ Pool } =pkg;
+const { Pool } = pkg;
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -31,12 +31,34 @@ import { format } from 'date-fns';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'express-session';
-import { pool } from './db.js';  // Make sure this path is correct for your DB configuration
 
 // Load environment variables from .env file
 const envPath = path.resolve(process.cwd(), 'env');
 console.log('Loading environment variables from:', envPath);
 dotenv.config({ path: envPath });
+
+// Configure PostgreSQL connection
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: {
+    rejectUnauthorized: false,
+    mode: process.env.DB_SSLMODE
+  }
+});
+
+// Test database connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('Error connecting to the database:', err);
+  } else {
+    console.log('Successfully connected to database');
+    release();
+  }
+});
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -305,29 +327,6 @@ app.use((req, res, next) => {
   console.log('Request Headers:', req.headers);
   console.log('Request Body:', req.body);
   next();
-});
-
-// Configure PostgreSQL connection
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: {
-    rejectUnauthorized: false,
-    mode: process.env.DB_SSLMODE
-  }
-});
-
-// Test database connection
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('Error connecting to the database:', err);
-  } else {
-    console.log('Successfully connected to database');
-    release();
-  }
 });
 
 // JWT Secret - Must match the secret used in the mobile app
