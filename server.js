@@ -83,7 +83,7 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express();
 
 // Trust proxy - required for secure cookies behind Cloudflare
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 
 // Get network interfaces
 const networkInterfaces = os.networkInterfaces();
@@ -112,118 +112,28 @@ process.env.FRONTEND_URL = process.env.FRONTEND_URL || `http://${HOST}:5173`;
 // Parse cookies before session
 app.use(cookieParser(process.env.SESSION_SECRET));
 
-// Session configuration with updated cookie settings
+// Session configuration
 app.use(session({
-  name: 'sessionId', // Custom cookie name
+  name: 'sessionId',
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: false,
-  rolling: true, // Refresh session with each request
+  rolling: true,
   proxy: true,
+  store: new session.MemoryStore(),
   cookie: {
     secure: true,
     httpOnly: true,
     sameSite: 'none',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
     path: '/',
-    domain: process.env.NODE_ENV === 'production' ? '.samirmajhi369.com.np' : undefined
-  },
-  store: new session.MemoryStore() // For development, use proper session store in production
+    domain: '.samirmajhi369.com.np',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
 }));
 
-// Initialize Passport and restore authentication state from session
+// Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
-
-// Add session debugging middleware
-app.use((req, res, next) => {
-  console.log('Session Debug:', {
-    sessionId: req.sessionID,
-    hasSession: !!req.session,
-    isAuthenticated: req.isAuthenticated(),
-    user: req.user ? { id: req.user.id, email: req.user.email } : null
-  });
-  next();
-});
-
-// Passport configuration
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.API_URL}/auth/google/callback`,
-    passReqToCallback: true,
-    proxy: true
-  },
-  async function(request, accessToken, refreshToken, profile, done) {
-    try {
-      console.log('Google OAuth Profile:', {
-        id: profile.id,
-        email: profile.emails[0].value,
-        name: profile.displayName
-      });
-
-      // First try to find user by Google ID
-      let user = await pool.query(
-        'SELECT * FROM users WHERE google_id = $1',
-        [profile.id]
-      );
-
-      // If not found by Google ID, try to find by email
-      if (user.rows.length === 0) {
-        user = await pool.query(
-          'SELECT * FROM users WHERE email = $1',
-          [profile.emails[0].value]
-        );
-      }
-
-      if (user.rows.length > 0) {
-        // User exists, update Google ID if not set
-        if (!user.rows[0].google_id) {
-          await pool.query(
-            'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2, updated_at = NOW() WHERE id = $3',
-            [profile.id, profile.photos[0].value, user.rows[0].id]
-          );
-        }
-        
-        // Update session with user info
-        request.session.user = {
-          id: user.rows[0].id,
-          email: user.rows[0].email,
-          fullName: user.rows[0].full_name
-        };
-        
-        return done(null, user.rows[0]);
-      }
-
-      // Create new user
-      const newUser = await pool.query(
-        `INSERT INTO users 
-         (google_id, email, full_name, profile_picture, is_google_auth, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) 
-         RETURNING *`,
-        [
-          profile.id,
-          profile.emails[0].value,
-          profile.displayName,
-          profile.photos[0].value,
-          true
-        ]
-      );
-
-      // Update session with new user info
-      request.session.user = {
-        id: newUser.rows[0].id,
-        email: newUser.rows[0].email,
-        fullName: newUser.rows[0].full_name
-      };
-
-      return done(null, newUser.rows[0]);
-    } catch (error) {
-      console.error('Google OAuth error:', error);
-      return done(error, null);
-    }
-  }
-));
 
 // Passport serialization
 passport.serializeUser((user, done) => {
@@ -233,9 +143,13 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    done(null, result.rows[0]);
-  } catch (error) {
-    done(error, null);
+    if (result.rows.length > 0) {
+      done(null, result.rows[0]);
+    } else {
+      done(new Error('User not found'));
+    }
+  } catch (err) {
+    done(err);
   }
 });
 
@@ -1785,54 +1699,57 @@ app.get('/auth/google', (req, res, next) => {
   });
 });
 
-app.get('/auth/google/callback', 
+app.get('/auth/google/callback',
   (req, res, next) => {
     console.log('OAuth callback received:', {
       session: req.session ? 'exists' : 'missing',
+      sessionID: req.sessionID,
       cookies: req.cookies,
-      query: req.query,
-      headers: {
-        origin: req.headers.origin,
-        referer: req.headers.referer,
-        host: req.headers.host
-      }
+      query: req.query
     });
     next();
   },
-  passport.authenticate('google', { 
+  passport.authenticate('google', {
     failureRedirect: `${process.env.FRONTEND_URL}/login?error=auth_failed`,
     failureMessage: true,
-    session: true
+    keepSessionInfo: true
   }),
   (req, res) => {
-    // Ensure session is saved before redirect
+    // Force session save
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_error`);
       }
 
-      // Log successful authentication
-      console.log('Authentication successful:', {
-        user: req.user ? {
-          id: req.user.id,
-          email: req.user.email,
-          google_id: req.user.google_id
-        } : 'missing',
-        session: req.session.id
-      });
-
-      // Set authentication cookie
+      // Set authentication cookie with proper domain
       res.cookie('isAuthenticated', 'true', {
         httpOnly: false,
         secure: true,
         sameSite: 'none',
         domain: '.samirmajhi369.com.np',
+        path: '/',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
-      // Redirect to dashboard with session token
-      res.redirect(`${process.env.FRONTEND_URL}/dashboard?auth=${req.session.id}`);
+      // Set session cookie with proper domain
+      res.cookie('sessionId', req.sessionID, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        domain: '.samirmajhi369.com.np',
+        path: '/',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
+
+      console.log('Redirecting with session:', {
+        sessionID: req.sessionID,
+        isAuthenticated: req.isAuthenticated(),
+        user: req.user ? { id: req.user.id, email: req.user.email } : null
+      });
+
+      // Redirect to dashboard
+      res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     });
   }
 );
