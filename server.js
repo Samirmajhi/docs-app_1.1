@@ -82,8 +82,8 @@ if (process.env.NODE_ENV !== 'production') {
 // Initialize express app
 const app = express();
 
-// Trust proxy - required for rate limiting behind Nginx
-app.set('trust proxy', true);
+// Trust proxy - required for secure cookies behind Cloudflare
+app.set('trust proxy', 1);
 
 // Get network interfaces
 const networkInterfaces = os.networkInterfaces();
@@ -109,14 +109,17 @@ process.env.PORT = PORT;
 process.env.HOST = HOST;
 process.env.FRONTEND_URL = process.env.FRONTEND_URL || `http://${HOST}:5173`;
 
-// Session configuration
+// Session configuration with updated cookie settings
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: false,
+  proxy: true,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    secure: true, // Required for HTTPS
+    sameSite: 'none', // Required for cross-site cookies
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    domain: '.samirmajhi369.com.np' // Allow sharing between subdomains
   }
 }));
 
@@ -1704,23 +1707,44 @@ app.get('/auth/google', passport.authenticate('google', {
 }));
 
 app.get('/auth/google/callback', 
+  (req, res, next) => {
+    console.log('OAuth callback received:', {
+      session: req.session ? 'exists' : 'missing',
+      cookies: req.cookies,
+      query: req.query
+    });
+    next();
+  },
   passport.authenticate('google', { 
     failureRedirect: `${process.env.FRONTEND_URL}/login`,
+    failureMessage: true,
     session: true
   }),
   (req, res) => {
+    // Log successful authentication
+    console.log('Authentication successful:', {
+      user: req.user ? 'exists' : 'missing',
+      session: req.session ? 'exists' : 'missing'
+    });
+    
+    // Ensure user is in session
+    if (!req.user) {
+      console.error('User missing from request after authentication');
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_error`);
+    }
+    
     // Successful authentication
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
 );
 
-// Add error handling middleware
+// Add error handler for authentication
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ 
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
+  console.error('Authentication error:', err);
+  if (err.name === 'AuthenticationError') {
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=${err.message}`);
+  }
+  next(err);
 });
 
 // Backblaze B2 Configuration
