@@ -167,21 +167,15 @@ app.use(cors({
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
-      callback(null, false);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control'],
-  exposedHeaders: ['Set-Cookie', 'Date', 'ETag']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'X-Auth-Token'],
+  exposedHeaders: ['Set-Cookie', 'Date', 'ETag'],
+  maxAge: 86400 // 24 hours
 }));
-
-// Additional security headers
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  next();
-});
 
 // Enable pre-flight requests for all routes
 app.options('*', cors());
@@ -189,24 +183,7 @@ app.options('*', cors());
 // Additional headers for security and CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-  res.header(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Auth-Token'
-  );
-  
-  // Log CORS-related headers for debugging
-  console.log('CORS Headers:', {
-    origin: req.headers.origin,
-    credentials: req.headers['access-control-request-credentials'],
-    method: req.method,
-    path: req.path
-  });
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
   next();
 });
 
