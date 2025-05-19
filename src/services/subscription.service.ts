@@ -29,9 +29,6 @@ const DEFAULT_STORAGE = {
 };
 
 class SubscriptionService {
-  // Use a hardcoded URL to avoid any issues with baseUrl being undefined
-  private baseUrl = 'http://34.132.75.76:7000/api';
-
   async getPlans(): Promise<SubscriptionPlan[]> {
     try {
       console.log('Fetching subscription plans...');
