@@ -2,7 +2,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 // Get the API URL from environment variables
-const API_URL = import.meta.env.VITE_API_URL || 'https://samirmajhi369.com.np/api';
+const API_URL = 'https://api.samirmajhi369.com.np/api';
 
 // Create axios instance with default config
 const api = axios.create({
