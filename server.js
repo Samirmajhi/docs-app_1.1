@@ -3462,3 +3462,52 @@ app.get('/', (req, res) => {
     </html>
   `);
 });
+
+// Passport Google Strategy Configuration
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${process.env.API_URL}/auth/google/callback`,
+    passReqToCallback: true,
+    proxy: true
+  },
+  async function(request, accessToken, refreshToken, profile, done) {
+    try {
+      // Find or create user logic
+      let user = await pool.query(
+        'SELECT * FROM users WHERE google_id = $1',
+        [profile.id]
+      );
+      if (user.rows.length === 0) {
+        user = await pool.query(
+          'SELECT * FROM users WHERE email = $1',
+          [profile.emails[0].value]
+        );
+      }
+      if (user.rows.length > 0) {
+        if (!user.rows[0].google_id) {
+          await pool.query(
+            'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2, updated_at = NOW() WHERE id = $3',
+            [profile.id, profile.photos[0].value, user.rows[0].id]
+          );
+        }
+        return done(null, user.rows[0]);
+      }
+      const newUser = await pool.query(
+        `INSERT INTO users 
+         (google_id, email, full_name, profile_picture, is_google_auth, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, true, NOW(), NOW()) 
+         RETURNING *`,
+        [
+          profile.id,
+          profile.emails[0].value,
+          profile.displayName,
+          profile.photos[0].value
+        ]
+      );
+      return done(null, newUser.rows[0]);
+    } catch (error) {
+      return done(error, null);
+    }
+  }
+));
