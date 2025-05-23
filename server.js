@@ -154,14 +154,15 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // CORS configuration
+const allowedOrigins = [
+  'https://samirmajhi369.com.np',
+  'https://api.samirmajhi369.com.np',
+  process.env.FRONTEND_URL
+];
+
+// CORS middleware configuration
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigins = [
-      'https://samirmajhi369.com.np',
-      'https://api.samirmajhi369.com.np',
-      process.env.FRONTEND_URL
-    ];
-    
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -173,8 +174,7 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'X-Auth-Token'],
-  exposedHeaders: ['Set-Cookie', 'Date', 'ETag'],
-  maxAge: 86400 // 24 hours
+  exposedHeaders: ['Set-Cookie', 'Date', 'ETag']
 }));
 
 // Enable pre-flight requests for all routes
@@ -3537,4 +3537,16 @@ app.use((req, res, next) => {
     timestamp: new Date().toISOString()
   });
   next();
+});
+
+// Add error handling middleware for CORS
+app.use((err, req, res, next) => {
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      message: 'CORS error: Origin not allowed',
+      error: 'cors_error',
+      allowedOrigins: allowedOrigins
+    });
+  }
+  next(err);
 });
