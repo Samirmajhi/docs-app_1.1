@@ -182,8 +182,13 @@ app.options('*', cors());
 
 // Additional headers for security and CORS
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (origin === 'https://samirmajhi369.com.np' || origin === 'https://api.samirmajhi369.com.np')) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-Auth-Token');
   next();
 });
 
@@ -3511,3 +3516,25 @@ passport.use(new GoogleStrategy({
     }
   }
 ));
+
+// Add test endpoint for CORS verification
+app.get('/api/test-cors', (req, res) => {
+  res.json({
+    message: 'CORS is working!',
+    origin: req.headers.origin,
+    headers: req.headers,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Add CORS debugging middleware
+app.use((req, res, next) => {
+  console.log('Request received:', {
+    method: req.method,
+    path: req.path,
+    origin: req.headers.origin,
+    headers: req.headers,
+    timestamp: new Date().toISOString()
+  });
+  next();
+});
