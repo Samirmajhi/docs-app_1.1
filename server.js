@@ -2202,6 +2202,7 @@ app.get('/api/subscription/storage', authenticateToken, async (req, res) => {
       LEFT JOIN documents d ON d.user_id = u.id
       JOIN subscription_plans sp ON u.subscription_id = sp.id
       WHERE u.id = $1
+      GROUP BY sp.storage_limit
     `, [userId]);
 
     if (result.rows.length === 0) {
