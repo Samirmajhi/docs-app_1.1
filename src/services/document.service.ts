@@ -142,7 +142,8 @@ const documentService = {
       // Get the file from our server
       const response = await api.get(`/documents/${id}/download`, {
         params: { format },
-        responseType: 'blob'
+        responseType: 'blob',
+        timeout: 120000 // 2 minutes
       });
 
       // Create a blob URL and trigger download
