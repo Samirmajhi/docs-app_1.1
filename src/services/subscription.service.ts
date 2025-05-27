@@ -95,8 +95,8 @@ class SubscriptionService {
       // First try with a direct fetch to avoid any baseUrl issues
       try {
         const timestamp = new Date().getTime(); // Cache-busting parameter
-        // Direct fetch call with hardcoded URL
-        const response = await fetch(`http://34.132.75.76:7000/api/subscription/storage?t=${timestamp}`, {
+        // Direct fetch call with relative URL
+        const response = await fetch(`/api/subscription/storage?t=${timestamp}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
             'Content-Type': 'application/json'
