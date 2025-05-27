@@ -2192,16 +2192,16 @@ app.get('/api/subscription/storage', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const result = await pool.query(`
       SELECT 
-      COALESCE(SUM(d.size), 0) as used,
-      sp.storage_limit as limit,
-      CASE 
-        WHEN sp.storage_limit = 0 THEN true
-        ELSE COALESCE(SUM(d.size), 0) < sp.storage_limit
-      END as has_available_storage
-    FROM documents d
-    JOIN users u ON d.user_id = u.id
-    JOIN subscription_plans sp ON u.subscription_id = sp.id
-    WHERE u.id = $1
+        COALESCE(SUM(d.size), 0) as used,
+        sp.storage_limit as limit,
+        CASE 
+          WHEN sp.storage_limit = 0 THEN true
+          ELSE COALESCE(SUM(d.size), 0) < sp.storage_limit
+        END as has_available_storage
+      FROM users u
+      LEFT JOIN documents d ON d.user_id = u.id
+      JOIN subscription_plans sp ON u.subscription_id = sp.id
+      WHERE u.id = $1
     `, [userId]);
 
     if (result.rows.length === 0) {
