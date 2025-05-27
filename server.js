@@ -473,7 +473,7 @@ app.post('/api/auth/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '24h' }
     );
-    
+    // good bro
     console.log('Login successful for user:', { id: user.id, email: user.email });
     
     res.json({
