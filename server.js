@@ -3478,12 +3478,15 @@ passport.use(new GoogleStrategy({
         }
         return done(null, user.rows[0]);
       }
+      // Generate a UUID for the new user
+      const newUserId = uuidv4();
       const newUser = await pool.query(
         `INSERT INTO users 
-         (google_id, email, full_name, profile_picture, is_google_auth, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, true, NOW(), NOW()) 
+         (id, google_id, email, full_name, profile_picture, is_google_auth, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW()) 
          RETURNING *`,
         [
+          newUserId,
           profile.id,
           profile.emails[0].value,
           profile.displayName,
