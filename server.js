@@ -1692,15 +1692,15 @@ app.get('/auth/google/callback',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
-      // Set session cookie with proper domain
-      res.cookie('sessionId', req.sessionID, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        domain: '.samirmajhi369.com.np',
-        path: '/',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-      });
+      // Remove manual sessionId cookie set here
+      // res.cookie('sessionId', req.sessionID, {
+      //   httpOnly: true,
+      //   secure: true,
+      //   sameSite: 'none',
+      //   domain: '.samirmajhi369.com.np',
+      //   path: '/',
+      //   maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      // });
 
       console.log('Redirecting with session:', {
         sessionID: req.sessionID,
