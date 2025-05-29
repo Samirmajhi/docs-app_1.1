@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'sonner';
 
 const AuthCallback = () => {
   const [searchParams] = useSearchParams();
@@ -9,16 +10,29 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const token = searchParams.get('token');
+    const error = searchParams.get('error');
+    
+    if (error) {
+      console.error('Google auth error:', error);
+      toast.error('Authentication failed. Please try again.');
+      navigate('/');
+      return;
+    }
+
     if (token) {
       handleGoogleCallback(token)
         .then(() => {
+          toast.success('Successfully authenticated');
           navigate('/dashboard');
         })
         .catch((error) => {
           console.error('Error handling Google callback:', error);
+          toast.error('Failed to complete authentication');
           navigate('/');
         });
     } else {
+      console.error('No token received from Google');
+      toast.error('Authentication failed. No token received.');
       navigate('/');
     }
   }, [searchParams, handleGoogleCallback, navigate]);

@@ -300,7 +300,7 @@ const AccessRequestTable: React.FC<AccessRequestTableProps> = ({
       
       {/* Confirmation Dialog */}
       <AlertDialog open={!!dialogAction} onOpenChange={(open) => !open && setDialogAction(null)}>
-        <AlertDialogContent className="max-w-2xl">
+        <AlertDialogContent className="max-w-[90vw] md:max-w-[800px] max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {dialogAction === 'approve' ? 'Approve Access Request' : 'Deny Access Request'}
@@ -335,14 +335,14 @@ const AccessRequestTable: React.FC<AccessRequestTableProps> = ({
                         </div>
                       </div>
                       
-                      <div className="border rounded-md overflow-hidden">
+                      <div className="border rounded-md overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead className="w-[30px]">Select</TableHead>
-                              <TableHead>Name</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Size</TableHead>
+                              <TableHead className="min-w-[200px]">Name</TableHead>
+                              <TableHead className="min-w-[100px]">Type</TableHead>
+                              <TableHead className="min-w-[100px]">Size</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -355,11 +355,11 @@ const AccessRequestTable: React.FC<AccessRequestTableProps> = ({
                                   />
                                 </TableCell>
                                 <TableCell className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-muted-foreground" />
-                                  <span className="truncate">{doc.name}</span>
+                                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="truncate max-w-[300px]">{doc.name}</span>
                                 </TableCell>
-                                <TableCell>{doc.type.split('/')[1]?.toUpperCase() || doc.type}</TableCell>
-                                <TableCell>{formatBytes(doc.size)}</TableCell>
+                                <TableCell className="whitespace-nowrap">{doc.type.split('/')[1]?.toUpperCase() || doc.type}</TableCell>
+                                <TableCell className="whitespace-nowrap">{formatBytes(doc.size)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -375,36 +375,38 @@ const AccessRequestTable: React.FC<AccessRequestTableProps> = ({
                   )}
                   
                   {/* Permission Level Selection */}
-                  <Label htmlFor="permission-level" className="text-sm font-medium mb-2 block">
-                    Permission Level
-                  </Label>
-                  <Select
-                    value={permissionLevel}
-                    onValueChange={(value) => setPermissionLevel(value as 'view_only' | 'view_and_download')}
-                  >
-                    <SelectTrigger id="permission-level" className="w-full">
-                      <SelectValue placeholder="Select permission level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="view_only">
-                        <div className="flex items-center">
-                          <ViewIcon className="h-4 w-4 mr-2" />
-                          <span>View Only</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="view_and_download">
-                        <div className="flex items-center">
-                          <Download className="h-4 w-4 mr-2" />
-                          <span>View and Download</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {permissionLevel === 'view_only' 
-                      ? 'Requester will only be able to view documents without downloading them'
-                      : 'Requester will be able to both view and download the documents'}
-                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="permission-level" className="text-sm font-medium">
+                      Permission Level
+                    </Label>
+                    <Select
+                      value={permissionLevel}
+                      onValueChange={(value) => setPermissionLevel(value as 'view_only' | 'view_and_download')}
+                    >
+                      <SelectTrigger id="permission-level" className="w-full">
+                        <SelectValue placeholder="Select permission level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="view_only">
+                          <div className="flex items-center">
+                            <ViewIcon className="h-4 w-4 mr-2" />
+                            <span>View Only</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="view_and_download">
+                          <div className="flex items-center">
+                            <Download className="h-4 w-4 mr-2" />
+                            <span>View and Download</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {permissionLevel === 'view_only' 
+                        ? 'Requester will only be able to view documents without downloading them'
+                        : 'Requester will be able to both view and download the documents'}
+                    </p>
+                  </div>
                 </>
               )}
             </div>

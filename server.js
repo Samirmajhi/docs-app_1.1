@@ -124,9 +124,9 @@ app.use(session({
   cookie: {
     secure: true,
     httpOnly: true,
-    sameSite: 'none',
+    sameSite: 'none', // Required for cross-domain
+    domain: '.samirmajhi369.com.np', // Allow sharing between subdomains
     path: '/',
-    domain: '.samirmajhi369.com.np',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
@@ -162,7 +162,13 @@ const allowedOrigins = [
 
 // CORS middleware
 app.use(cors({
-  origin: 'https://samirmajhi369.com.np',
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'X-Auth-Token']
@@ -1682,7 +1688,7 @@ app.get('/auth/google/callback',
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_error`);
       }
 
-      // Set authentication cookie with proper domain
+      // Set authentication cookie
       res.cookie('isAuthenticated', 'true', {
         httpOnly: false,
         secure: true,
@@ -1692,15 +1698,16 @@ app.get('/auth/google/callback',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
-      // Remove manual sessionId cookie set here
-      // res.cookie('sessionId', req.sessionID, {
-      //   httpOnly: true,
-      //   secure: true,
-      //   sameSite: 'none',
-      //   domain: '.samirmajhi369.com.np',
-      //   path: '/',
-      //   maxAge: 24 * 60 * 60 * 1000 // 24 hours
-      // });
+      // Generate JWT token
+      const token = jwt.sign(
+        { 
+          id: req.user.id, 
+          email: req.user.email,
+          isGoogleAuth: true
+        },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
 
       console.log('Redirecting with session:', {
         sessionID: req.sessionID,
@@ -1708,8 +1715,8 @@ app.get('/auth/google/callback',
         user: req.user ? { id: req.user.id, email: req.user.email } : null
       });
 
-      // Redirect to dashboard
-      res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+      // Redirect to frontend with token
+      res.redirect(`${process.env.FRONTEND_URL}/auth-callback?token=${token}`);
     });
   }
 );
@@ -3458,27 +3465,42 @@ passport.use(new GoogleStrategy({
   },
   async function(request, accessToken, refreshToken, profile, done) {
     try {
-      // Find or create user logic
+      console.log('Google OAuth profile:', {
+        id: profile.id,
+        email: profile.emails[0].value,
+        name: profile.displayName
+      });
+
+      // First check if user exists with Google ID
       let user = await pool.query(
         'SELECT * FROM users WHERE google_id = $1',
         [profile.id]
       );
-      if (user.rows.length === 0) {
-        user = await pool.query(
-          'SELECT * FROM users WHERE email = $1',
-          [profile.emails[0].value]
-        );
-      }
+
+      // If user exists with Google ID, return them (login flow)
       if (user.rows.length > 0) {
-        if (!user.rows[0].google_id) {
-          await pool.query(
-            'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2, updated_at = NOW() WHERE id = $3',
-            [profile.id, profile.photos[0].value, user.rows[0].id]
-          );
-        }
+        console.log('Existing Google user found:', user.rows[0].id);
         return done(null, user.rows[0]);
       }
-      // Generate a UUID for the new user
+
+      // Check if user exists with email
+      user = await pool.query(
+        'SELECT * FROM users WHERE email = $1',
+        [profile.emails[0].value]
+      );
+
+      // If user exists with email but no Google ID, update their account
+      if (user.rows.length > 0) {
+        console.log('Linking existing email account with Google:', user.rows[0].id);
+        await pool.query(
+          'UPDATE users SET google_id = $1, is_google_auth = true, profile_picture = $2, updated_at = NOW() WHERE id = $3',
+          [profile.id, profile.photos[0].value, user.rows[0].id]
+        );
+        return done(null, user.rows[0]);
+      }
+
+      // If no user exists, create new user (registration flow)
+      console.log('Creating new user from Google profile');
       const newUserId = uuidv4();
       const newUser = await pool.query(
         `INSERT INTO users 
@@ -3493,8 +3515,16 @@ passport.use(new GoogleStrategy({
           profile.photos[0].value
         ]
       );
+
+      console.log('New user registered via Google:', {
+        id: newUserId,
+        email: profile.emails[0].value,
+        name: profile.displayName
+      });
+
       return done(null, newUser.rows[0]);
     } catch (error) {
+      console.error('Google OAuth error:', error);
       return done(error, null);
     }
   }
